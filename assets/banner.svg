@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="Virtual Phone — a browser softphone on Telnyx">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08080c"/>
+      <stop offset="0.55" stop-color="#0d0b16"/>
+      <stop offset="1" stop-color="#140f24"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.02"/>
+    </linearGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#ffffff" fill-opacity="0.05"/>
+    </pattern>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="46"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="420" fill="url(#bg)"/>
+  <rect width="1280" height="420" fill="url(#dots)"/>
+  <ellipse cx="1080" cy="70" rx="320" ry="240" fill="url(#glowA)" filter="url(#soft)"/>
+  <ellipse cx="220" cy="400" rx="300" ry="200" fill="url(#glowB)" filter="url(#soft)"/>
+
+  <!-- Left: brand -->
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <g transform="translate(84, 108)">
+      <rect x="0" y="0" rx="999" width="360" height="34" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.12"/>
+      <circle cx="22" cy="17" r="4" fill="#34d399"/>
+      <text x="38" y="22" font-size="13" letter-spacing="2.4" fill="#c4b5fd" font-weight="600">TELNYX · WEBRTC · REACT · BUN</text>
+    </g>
+
+    <text x="82" y="228" font-size="82" font-weight="700" fill="#f5f3ff" letter-spacing="-2">Virtual Phone</text>
+
+    <text x="86" y="284" font-size="23" fill="#a1a1aa">Turn any browser tab into a phone line.</text>
+    <text x="86" y="318" font-size="23" fill="#71717a">Multi-number WebRTC softphone with inbound &amp; outbound calls.</text>
+
+    <g transform="translate(86, 352)">
+      <rect width="150" height="40" rx="999" fill="url(#accent)"/>
+      <text x="75" y="26" font-size="15" font-weight="600" fill="#0b0616" text-anchor="middle">Answer calls</text>
+      <rect x="166" width="176" height="40" rx="999" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+      <text x="254" y="26" font-size="15" font-weight="600" fill="#e4e4e7" text-anchor="middle">Track live cost</text>
+    </g>
+  </g>
+
+  <!-- Right: phone mock -->
+  <g transform="translate(905, 34)">
+    <rect x="0" y="0" width="270" height="352" rx="36" fill="#14141c" stroke="#2b2b38" stroke-width="1.5"/>
+    <rect x="14" y="14" width="242" height="324" rx="26" fill="#0c0c12"/>
+
+    <!-- status -->
+    <g transform="translate(34, 40)">
+      <circle cx="5" cy="0" r="5" fill="#34d399"/>
+      <text x="20" y="5" font-size="13" fill="#a1a1aa" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">Ready · +1 555 010 0000</text>
+    </g>
+
+    <!-- caller -->
+    <text x="135" y="118" font-size="15" fill="#71717a" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">INCOMING CALL</text>
+    <text x="135" y="156" font-size="26" font-weight="700" fill="#f4f4f5" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">+1 555 010 0000</text>
+
+    <!-- quick chips -->
+    <g font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">
+      <rect x="34" y="188" width="92" height="30" rx="999" fill="url(#chip)" stroke="#ffffff" stroke-opacity="0.1"/>
+      <circle cx="52" cy="203" r="3.5" fill="#34d399"/>
+      <text x="64" y="208" font-size="11" fill="#d4d4d8">+1 555…</text>
+      <rect x="134" y="188" width="92" height="30" rx="999" fill="url(#chip)" stroke="#ffffff" stroke-opacity="0.1"/>
+      <circle cx="152" cy="203" r="3.5" fill="#71717a"/>
+      <text x="164" y="208" font-size="11" fill="#d4d4d8">+1 555…</text>
+    </g>
+
+    <!-- buttons -->
+    <g>
+      <rect x="34" y="252" width="98" height="52" rx="18" fill="#1c1c24" stroke="#3f3f46"/>
+      <g transform="translate(70, 265) rotate(135 12 12)" fill="#f87171">
+        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+      </g>
+
+      <rect x="140" y="252" width="98" height="52" rx="18" fill="url(#accent)"/>
+      <g transform="translate(176, 265)" fill="#0b0616">
+        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+      </g>
+    </g>
+
+    <!-- waveform -->
+    <g transform="translate(34, 316)" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" opacity="0.75">
+      <line x1="0" y1="6" x2="0" y2="6"/>
+      <line x1="12" y1="1" x2="12" y2="11"/>
+      <line x1="24" y1="-3" x2="24" y2="15"/>
+      <line x1="36" y1="2" x2="36" y2="10"/>
+      <line x1="48" y1="-5" x2="48" y2="17"/>
+      <line x1="60" y1="1" x2="60" y2="11"/>
+      <line x1="72" y1="-2" x2="72" y2="14"/>
+      <line x1="84" y1="3" x2="84" y2="9"/>
+      <line x1="96" y1="-4" x2="96" y2="16"/>
+      <line x1="108" y1="1" x2="108" y2="11"/>
+      <line x1="120" y1="-3" x2="120" y2="15"/>
+      <line x1="132" y1="2" x2="132" y2="10"/>
+      <line x1="144" y1="-2" x2="144" y2="14"/>
+      <line x1="156" y1="3" x2="156" y2="9"/>
+      <line x1="168" y1="0" x2="168" y2="12"/>
+      <line x1="180" y1="-3" x2="180" y2="15"/>
+    </g>
+  </g>
+</svg>
