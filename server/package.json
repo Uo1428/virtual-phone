@@ -1,0 +1,21 @@
+{
+  "name": "@virtual-phone/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@virtual-phone/shared": "workspace:*",
+    "compression": "^1.7.5",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.0.1",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "lowdb": "^7.0.1",
+    "telnyx": "7.21.0",
+    "zod": "^3.24.1"
+  }
+}

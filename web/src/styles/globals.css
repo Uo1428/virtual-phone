@@ -1,0 +1,27 @@
+@import "@virtual-phone/ui/theme.css";
+
+/* Scan the shared design-system package for utility classes. */
+@source "../../../packages/ui/src";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* Mobile: avoid rubber-banding the whole app behind the fixed nav. */
+  overscroll-behavior-y: none;
+}
+
+/* Keep tap targets comfortable without the grey flash on mobile. */
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
