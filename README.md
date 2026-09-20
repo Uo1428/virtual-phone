@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="Virtual Phone — a browser softphone on Telnyx" width="100%" />
+<img src="assets/banner.svg" alt="Virtual Phone — a full-stack WebRTC softphone on Telnyx" width="100%" />
 
 <br/>
 <br/>
 
-A multi-number **WebRTC softphone for Telnyx**. Real browser-based VoIP with inbound and outbound calls, click-to-call, live call cost, and CDR reconciliation — wrapped in a mobile-first UI.
+A **full-stack, real-time WebRTC softphone on Telnyx**, built end-to-end with React, TypeScript, Bun, and Express. The dial pad is the easy part — the engineering is keeping sessions, telephony webhooks, and money correct while calls are live.
 
 <br/>
 
@@ -13,38 +13,107 @@ A multi-number **WebRTC softphone for Telnyx**. Real browser-based VoIP with inb
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=fff&style=for-the-badge)
 ![React](https://img.shields.io/badge/React_19-61DAFB?logo=react&logoColor=000&style=for-the-badge)
 ![Express](https://img.shields.io/badge/Express_5-000?logo=express&logoColor=fff&style=for-the-badge)
-![Tailwind](https://img.shields.io/badge/Tailwind_4-06B6D4?logo=tailwindcss&logoColor=fff&style=for-the-badge)
+![WebRTC](https://img.shields.io/badge/WebRTC-real--time-333?style=for-the-badge)
 ![Telnyx](https://img.shields.io/badge/Telnyx-WebRTC-00C08B?style=for-the-badge)
 
 </div>
 
 <br/>
 
-## ⚡ What it is
+## 🧭 Overview
 
-A working softphone, not a demo button. Open a tab, register a number, and that tab is a phone line.
+Virtual Phone turns a browser tab into a working phone line on the Telnyx platform: register a number, receive inbound calls, dial out to the PSTN, and watch duration and cost land in real time.
 
-- ☎️ **Inbound & outbound** calls over WebRTC, bridged to the PSTN by Telnyx
-- 🧩 **One number per tab** — several independent lines in one browser
-- 📱 **Mobile-first UI** with a bottom tab bar and an app-wide incoming-call sheet
+It is a single deployable service — Bun + Express serves both the REST API and the built React SPA — with a shared design system, a typed API contract, and a test suite. It's the kind of project that only looks simple from the outside.
 
 <br/>
 
-## 🎛 Highlights
+## 🧱 Engineering highlights
 
-- 📥 **Answer calls that actually ring** — a Web Audio ringtone with vibration that keeps ringing in background tabs.
-- 📤 **Dial the world** — E.164 outbound with a no-answer guard so a dead leg never bills forever.
-- ⚡ **On-net quick dial** — tap any other number on the account to call it.
-- 🚫 **Self-call guard** — you can't dial the number you're connected as (UI + API).
-- 💸 **Live cost & talk time** — reconciled against Telnyx CDRs, per call.
-- 🧾 **Full call history** — per-call legs, events, hangup causes, and a timeline.
-- 🤝 **Occupancy & takeover** — see which device holds a number and take it over.
-- 📡 **Live event stream** — Server-Sent Events push calls, occupancy, and logs to the UI.
-- 🔎 **Auto-discovery** — finds or creates the Call Control app, connection, and voice profile.
+**Real-time telephony lifecycle**
+- Mints short-lived WebRTC credentials per tab and **auto-refreshes them on the SDK's "token expiring soon" warning**, so long-running sessions never silently drop.
+- Drives each call through the Telnyx state machine and persists every transition, with a **no-answer watchdog** (client timer + a server sweep every 60s) that tears down dead legs before they bill.
+
+**Multi-tab session identity**
+- One number per tab, enforced with a **per-tab credential registry and heartbeat**; occupancy changes are pushed live over Server-Sent Events.
+- **Duplicate-tab detection**: browsers copy `sessionStorage` when duplicating a tab, so tabs announce themselves over `BroadcastChannel` and the loser adopts a fresh identity — otherwise two tabs would share one credential.
+- **Force takeover** lets a second device reclaim a number another tab is holding, revoking the old session in real time.
+
+**Inbound that behaves like a phone**
+- A synthesized **Web Audio ringtone scheduled on the audio clock** — not `setTimeout`, which background tabs throttle — and unlocked on the first user gesture to satisfy browser autoplay policy.
+- An app-wide answer/decline sheet, so a call can be taken from any screen, not just the softphone page.
+
+**Cost & data correctness**
+- Per-call **CDR reconciliation**: matches Telnyx records by leg/session id, falls back to direction + parties + a time window, and never attributes the same record twice.
+- A per-call recorder log with offset timings, plus a live event feed for operators.
+
+**Security & platform**
+- **Signature-verified Telnyx webhooks**, signed `httpOnly` session cookies, a strict Content-Security-Policy, and per-client API rate limiting.
+- Boot-time **discovery and provisioning** of the Call Control app, credential connection, and outbound voice profile — with idempotent pins for existing resources.
+
+**Product & UX**
+- A mobile-first design system (Tailwind v4 + Motion) with a bottom tab bar, safe-area handling, and data tables that collapse into cards on phones.
+- A shared `@virtual-phone/ui` package keeps the design language and motion consistent across every surface.
 
 <br/>
 
-## 🚀 Quick start
+## 🏗 Architecture
+
+The browser talks WebRTC straight to Telnyx for media and signaling. The server owns REST, webhooks, state, and cost — it never touches the audio path.
+
+```mermaid
+flowchart LR
+  subgraph Browser
+    UI["React SPA"]
+    SDK["@telnyx/webrtc"]
+  end
+
+  subgraph Server["Bun + Express"]
+    API["REST API + SSE"]
+    DB[("lowdb JSON")]
+  end
+
+  Telnyx["Telnyx Cloud"]
+  PSTN["PSTN / Mobile"]
+
+  UI <--> API
+  SDK <-->|signaling + SRTP media| Telnyx
+  API <-->|REST + webhooks| Telnyx
+  API --- DB
+  Telnyx <--> PSTN
+```
+
+<br/>
+
+## 🛠 Tech stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | React 19, Vite, Tailwind CSS v4, Motion — a typed SPA with a mobile-first design system |
+| **Language** | TypeScript end-to-end, with `zod` schemas shared between server and client |
+| **Runtime** | Bun — package manager, script runner, and test runner |
+| **Backend** | Express 5 — REST API, webhook receiver, and SPA host |
+| **Telephony** | `@telnyx/webrtc` for signaling and media, Telnyx Call Control for the PSTN bridge |
+| **Data** | `lowdb` (embedded JSON) for calls, events, and discovery state |
+| **Hardening** | `helmet`, `express-rate-limit`, signed cookie sessions, webhook signature verification |
+
+<br/>
+
+## 🎯 Skills this demonstrates
+
+| Area | Evidence in this repo |
+|---|---|
+| **WebRTC / VoIP engineering** | Credential lifecycle, token refresh, call state machine, SDP/media handling, PSTN bridging |
+| **Full-stack TypeScript** | Shared DTOs and validation across a React SPA and an Express API |
+| **Real-time systems** | Server-Sent Events for occupancy and call state, heartbeat/lease expiry, concurrency across tabs |
+| **API & data modeling** | REST surface, webhook ingestion, per-call timeline, CDR reconciliation and cost attribution |
+| **Security engineering** | Signature verification, CSP, rate limiting, session handling, secret hygiene |
+| **Product engineering** | Mobile-first UX, motion design, accessibility-minded components, zero-config provisioning |
+| **Engineering quality** | Monorepo with shared packages, strict typecheck, lint, and a test suite |
+
+<br/>
+
+## 🚀 Run it locally
 
 ```bash
 git clone https://github.com/Uo1428/virtual-phone.git
@@ -52,11 +121,8 @@ cd virtual-phone
 
 bun install
 cp .env.sample .env        # add your Telnyx API key + public URL
-
 bun run dev                # → http://localhost:5173
 ```
-
-> Need inbound calls? Point `PUBLIC_URL` at a public tunnel (e.g. `cloudflared`, `ngrok`) so Telnyx webhooks reach port `3000`, then assign a number in **Settings**.
 
 **Ship it on one host:**
 
@@ -65,15 +131,7 @@ bun run build   # web app → server/public
 bun run start   # API + SPA on :3000
 ```
 
-<br/>
-
-## 🧭 30-second tour
-
-1. **Connect** — pick a number and register it in this tab.
-2. **Receive** — an inbound call rings with an answer/decline sheet.
-3. **Dial** — type a number or tap an on-net quick-dial chip.
-4. **Watch** — cost and duration land in **Today** and **History**.
-5. **Inspect** — open any call for its timeline, legs, and recorded events.
+> Inbound calls need a public URL for webhooks — point `PUBLIC_URL` at a tunnel (`cloudflared`, `ngrok`) and assign a number in **Settings**.
 
 <br/>
 
@@ -102,37 +160,6 @@ Copy `.env.sample` to `.env`. Variables marked **prod** are required when `NODE_
 </details>
 
 <details>
-<summary><b>🧠 Architecture</b></summary>
-
-<br/>
-
-The browser talks WebRTC straight to Telnyx for media and signaling. The server handles REST, webhooks, cost, and state — it never touches the audio.
-
-```mermaid
-flowchart LR
-  subgraph Browser
-    UI["React SPA"]
-    SDK["@telnyx/webrtc"]
-  end
-
-  subgraph Server["Bun + Express"]
-    API["REST API + SSE"]
-    DB[("lowdb JSON")]
-  end
-
-  Telnyx["Telnyx Cloud"]
-  PSTN["PSTN / Mobile"]
-
-  UI <--> API
-  SDK <-->|signaling + SRTP media| Telnyx
-  API <-->|REST + webhooks| Telnyx
-  API --- DB
-  Telnyx <--> PSTN
-```
-
-</details>
-
-<details>
 <summary><b>🔌 API reference</b></summary>
 
 <br/>
@@ -148,7 +175,7 @@ Same-origin and session-gated, except `/api/health` and the Telnyx webhook.
 | `GET` | `/api/overview` | Dashboard: numbers, occupancy, today's cost, recent calls. |
 | `POST` | `/api/webrtc/token` · `/refresh` · `/heartbeat` · `/takeover` | WebRTC registration lifecycle. |
 | `DELETE` | `/api/webrtc/register` | Release this tab's registration. |
-| `POST` | `/api/calls/outbound` | Start an outbound call record (rejects self-calls). |
+| `POST` | `/api/calls/outbound` | Start an outbound call record. |
 | `GET` | `/api/calls` · `/api/calls/:id/timeline` | Recent calls and per-call timeline. |
 | `POST` | `/api/calls/:id/status` · `/reconcile` | Update state / reconcile cost from CDRs. |
 | `GET` | `/api/cost/summary` | Cost summary for a range. |
@@ -182,24 +209,20 @@ virtual-phone/
 
 </details>
 
-<details>
-<summary><b>🛡 Security</b></summary>
-
 <br/>
 
-- Telnyx webhooks are **signature-verified** with `TELNYX_PUBLIC_KEY`.
-- Signed, `httpOnly` session cookies via `SESSION_SECRET`.
-- Strict Content-Security-Policy — only Telnyx is allowed for `connect-src`.
-- `/api` is rate-limited to 240 requests per minute per client.
-- Secrets live in `.env`, which is git-ignored.
+## 📬 Let's work together
 
-</details>
+I build real-time, full-stack products like this one — WebRTC, TypeScript, and clean product engineering from API to pixel.
+
+- **GitHub:** [@Uo1428](https://github.com/Uo1428)
+<!-- Add your email / LinkedIn / portfolio link here so it renders on the repo. -->
 
 <br/>
 
 <div align="center">
 
 **Built with Bun, Express, React, and Telnyx WebRTC.**
-If this helped you ship a browser phone, a ⭐ goes a long way.
+If this was useful or interesting, a ⭐ goes a long way.
 
 </div>

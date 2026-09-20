@@ -45,7 +45,7 @@
     <text x="82" y="228" font-size="82" font-weight="700" fill="#f5f3ff" letter-spacing="-2">Virtual Phone</text>
 
     <text x="86" y="284" font-size="23" fill="#a1a1aa">Turn any browser tab into a phone line.</text>
-    <text x="86" y="318" font-size="23" fill="#71717a">Multi-number WebRTC softphone with inbound &amp; outbound calls.</text>
+    <text x="86" y="318" font-size="23" fill="#71717a">Built end-to-end with React, Bun, Express &amp; Telnyx WebRTC.</text>
 
     <g transform="translate(86, 352)">
       <rect width="150" height="40" rx="999" fill="url(#accent)"/>
