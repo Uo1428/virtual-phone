@@ -18,6 +18,9 @@ const EnvSchema = z.object({
   TELNYX_CALL_CONTROL_APP_ID: z.string().optional(),
   TELNYX_CREDENTIAL_CONNECTION_ID: z.string().optional(),
   TELNYX_OUTBOUND_VOICE_PROFILE_ID: z.string().optional(),
+  TELNYX_CALL_CONTROL_APP_NAME: z.string().default("virtual-phone"),
+  TELNYX_CREDENTIAL_CONNECTION_NAME: z.string().default("virtual-phone-webrtc"),
+  TELNYX_OUTBOUND_PROFILE_NAME: z.string().default("virtual-phone-outbound"),
   TELNYX_PROVISION: boolFromString(true),
   /** Opt out of webhook signature verification (e.g. a proxy already verifies). */
   TELNYX_ALLOW_UNVERIFIED_WEBHOOKS: boolFromString(false),

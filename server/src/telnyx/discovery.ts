@@ -3,7 +3,7 @@ import type { NumberDto } from "@virtual-phone/shared";
 import { env } from "../env";
 import { requireTelnyx } from "../telnyx/client";
 import { getDb, mutate } from "../db/db";
-import type { DiscoveredApp, DiscoveredConnection } from "../db/db";
+import type { DbData, DiscoveredApp, DiscoveredConnection } from "../db/db";
 import { logger } from "../log/logger";
 import { recordEvent } from "../events/eventStore";
 
@@ -24,6 +24,14 @@ function webhookUrl(): string | null {
   return `${env.PUBLIC_URL.replace(/\/$/, "")}/api/telnyx/webhooks`;
 }
 
+/** Resolve a resource id from the env pin first, then the persisted discovery state. */
+async function persistedId(pin: string | undefined, key: keyof DbData["settings"]): Promise<string | null> {
+  if (pin) return pin;
+  const db = await getDb();
+  const value = db.data.settings[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 async function ensureOutboundVoiceProfile(): Promise<{
   profile: { id: string; name: string } | null;
   warnings: string[];
@@ -31,18 +39,17 @@ async function ensureOutboundVoiceProfile(): Promise<{
   const client = requireTelnyx();
   const warnings: string[] = [];
 
-  if (env.TELNYX_OUTBOUND_VOICE_PROFILE_ID) {
-    const found = await client.outboundVoiceProfiles.retrieve(
-      env.TELNYX_OUTBOUND_VOICE_PROFILE_ID,
-    );
+  const id = await persistedId(env.TELNYX_OUTBOUND_VOICE_PROFILE_ID, "outboundVoiceProfileId");
+  if (id) {
+    const found = await client.outboundVoiceProfiles.retrieve(id);
     if (found.data) {
       return { profile: { id: found.data.id ?? "", name: found.data.name }, warnings };
     }
-    warnings.push("Pinned outbound voice profile not found; falling back to discovery.");
+    warnings.push("Previously discovered outbound voice profile not found; falling back to discovery.");
   }
 
   for await (const profile of client.outboundVoiceProfiles.list()) {
-    if (profile.enabled !== false) {
+    if (profile.name === env.TELNYX_OUTBOUND_PROFILE_NAME) {
       return { profile: { id: profile.id ?? "", name: profile.name }, warnings };
     }
   }
@@ -53,7 +60,7 @@ async function ensureOutboundVoiceProfile(): Promise<{
   }
 
   const created = await client.outboundVoiceProfiles.create({
-    name: "virtual-phone-outbound",
+    name: env.TELNYX_OUTBOUND_PROFILE_NAME,
     enabled: true,
   });
   logger.info("discovery_created_outbound_profile", { id: created.data?.id });
@@ -69,16 +76,19 @@ async function ensureCallControlApp(): Promise<{ app: DiscoveredApp | null; warn
   const warnings: string[] = [];
   const url = webhookUrl();
 
-  if (env.TELNYX_CALL_CONTROL_APP_ID) {
-    const found = await client.callControlApplications.retrieve(env.TELNYX_CALL_CONTROL_APP_ID);
+  const id = await persistedId(env.TELNYX_CALL_CONTROL_APP_ID, "callControlAppId");
+  if (id) {
+    const found = await client.callControlApplications.retrieve(id);
     if (found.data) {
       const app = toDiscoveredApp(found.data);
       await applyAppSettings(app);
       return { app, warnings };
     }
-    warnings.push("Pinned call control application not found; falling back to discovery.");
+    warnings.push("Previously discovered call control application not found; falling back to discovery.");
   }
 
+  // Prefer the app already wired to our webhook, then one with our app name.
+  // Never adopt an unrelated app: that would hijack its webhook URL.
   let candidate: DiscoveredApp | null = null;
   for await (const app of client.callControlApplications.list()) {
     const discovered = toDiscoveredApp(app);
@@ -86,7 +96,9 @@ async function ensureCallControlApp(): Promise<{ app: DiscoveredApp | null; warn
       candidate = discovered;
       break;
     }
-    if (!candidate) candidate = discovered;
+    if (!candidate && discovered.applicationName === env.TELNYX_CALL_CONTROL_APP_NAME) {
+      candidate = discovered;
+    }
   }
 
   if (!candidate) {
@@ -99,7 +111,7 @@ async function ensureCallControlApp(): Promise<{ app: DiscoveredApp | null; warn
       return { app: null, warnings };
     }
     const created = await client.callControlApplications.create({
-      application_name: "virtual-phone",
+      application_name: env.TELNYX_CALL_CONTROL_APP_NAME,
       webhook_event_url: url,
       webhook_api_version: "2",
       call_cost_in_webhooks: true,
@@ -139,7 +151,7 @@ async function applyAppSettings(app: DiscoveredApp): Promise<void> {
   if (!needsUrl && !needsCost) return;
 
   await client.callControlApplications.update(app.id, {
-    application_name: app.applicationName || "virtual-phone",
+    application_name: app.applicationName || env.TELNYX_CALL_CONTROL_APP_NAME,
     webhook_event_url: url ?? app.webhookEventUrl ?? "",
     call_cost_in_webhooks: true,
   });
@@ -159,7 +171,6 @@ async function ensureCredentialConnection(
 
   const applySettings = async (id: string) => {
     await client.credentialConnections.update(id, {
-      connection_name: "virtual-phone-webrtc",
       sip_uri_calling_preference: "internal",
       call_cost_in_webhooks: false,
       ...(outboundVoiceProfileId
@@ -179,12 +190,24 @@ async function ensureCredentialConnection(
     warnings.push("Pinned credential connection not found; falling back to discovery.");
   }
 
-  for await (const conn of client.credentialConnections.list()) {
-    const discovered = toDiscoveredConnection(conn);
-    if (discovered.sipUriCallingPreference !== "internal") {
-      await applySettings(discovered.id);
-      discovered.sipUriCallingPreference = "internal";
+  // Prefer the connection we discovered previously, then one matching our name.
+  // The account may hold other apps' connections with unique names account-wide,
+  // so never adopt an arbitrary one.
+  const priorId = await persistedId(undefined, "credentialConnectionId");
+  if (priorId) {
+    const found = await client.credentialConnections.retrieve(priorId);
+    if (found.data) {
+      await applySettings(priorId);
+      return { connection: toDiscoveredConnection(found.data), warnings };
     }
+    warnings.push("Previously discovered credential connection not found; falling back to discovery.");
+  }
+
+  for await (const conn of client.credentialConnections.list()) {
+    if (conn.connection_name !== env.TELNYX_CREDENTIAL_CONNECTION_NAME) continue;
+    const discovered = toDiscoveredConnection(conn);
+    await applySettings(discovered.id);
+    discovered.sipUriCallingPreference = "internal";
     return { connection: discovered, warnings };
   }
 
@@ -194,7 +217,7 @@ async function ensureCredentialConnection(
   }
 
   const created = await client.credentialConnections.create({
-    connection_name: "virtual-phone-webrtc",
+    connection_name: env.TELNYX_CREDENTIAL_CONNECTION_NAME,
     user_name: `vp${randomToken(6)}`,
     password: randomToken(16),
     sip_uri_calling_preference: "internal",
