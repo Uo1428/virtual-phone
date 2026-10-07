@@ -50,6 +50,38 @@ function loadWebrtc(): Promise<WebrtcModule> {
   return webrtcPromise;
 }
 
+type VendorWindow = Window &
+  typeof globalThis & {
+    webkitRTCPeerConnection?: typeof RTCPeerConnection;
+    mozRTCPeerConnection?: typeof RTCPeerConnection;
+  };
+
+/**
+ * The Telnyx SDK builds its peer with `new window.RTCPeerConnection(...)` and
+ * has no vendor fallback, so a missing global crashes the call with
+ * "window.RTCPeerConnection is not a constructor". WebRTC is absent in
+ * insecure contexts (plain http:// on anything but localhost), in browsers
+ * with WebRTC disabled, and behind some webviews/iframes. Detect that up front
+ * so the UI can explain it, and bridge legacy prefixed constructors for the
+ * SDK while we're at it.
+ */
+function webRtcSupportError(): string | null {
+  const w = window as VendorWindow;
+  if (!w.RTCPeerConnection) {
+    const vendor = w.webkitRTCPeerConnection ?? w.mozRTCPeerConnection;
+    if (vendor) w.RTCPeerConnection = vendor;
+  }
+  if (typeof w.RTCPeerConnection !== "function") {
+    return window.isSecureContext
+      ? "This browser doesn't support WebRTC (the softphone's audio transport). Try a recent Chrome, Edge, Firefox, or Safari."
+      : "WebRTC is blocked because this page isn't in a secure context. Open the app over https:// or on http://localhost.";
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return "This browser doesn't expose microphone capture (getUserMedia), which the softphone needs.";
+  }
+  return null;
+}
+
 export interface UseTelnyxResult {
   status: TelnyxStatus;
   error: string | null;
@@ -220,6 +252,14 @@ export function useTelnyx(): UseTelnyxResult {
       // Runs synchronously inside the Connect tap: unlock the ringtone's
       // AudioContext so a later inbound call is allowed to play sound.
       unlockRingtone();
+      // Fail fast with a readable message when the browser can't do WebRTC at
+      // all, instead of letting the SDK crash mid-call.
+      const supportError = webRtcSupportError();
+      if (supportError) {
+        setError(supportError);
+        setStatus("error");
+        throw new Error(supportError);
+      }
       // One number per tab: release whatever this tab currently holds first.
       if (clientRef.current && numberIdRef.current && numberIdRef.current !== targetNumberId) {
         void clientRef.current.disconnect();
@@ -238,7 +278,14 @@ export function useTelnyx(): UseTelnyxResult {
       const client = new mod.TelnyxRTC({ login_token: token.loginToken });
       attach(client, mod.TELNYX_WARNING_CODES.TOKEN_EXPIRING_SOON);
       clientRef.current = client;
-      await client.connect();
+      try {
+        await client.connect();
+      } catch (e) {
+        clientRef.current = null;
+        setStatus("error");
+        setError(e instanceof Error ? e.message : String(e));
+        throw e;
+      }
     },
     [attach],
   );

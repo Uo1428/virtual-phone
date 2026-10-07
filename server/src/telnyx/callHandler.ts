@@ -127,8 +127,9 @@ async function onInitiated(payload: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  await client.calls.actions.answer(callControlId, {});
-
+  // Do NOT answer the caller's leg here. Keep it ringing until the agent's browser
+  // picks up, so the PSTN side only sees "answered" when a human actually answers.
+  // Answering now would report the call as picked up the instant it arrives.
   const now = new Date().toISOString();
   const call: CallDto = {
     id: crypto.randomUUID(),
@@ -154,7 +155,7 @@ async function onInitiated(payload: Record<string, unknown>): Promise<void> {
         callControlId,
         sessionId: str(payload.call_session_id),
         role: "pstn",
-        state: "answered",
+        state: "ringing",
       },
     ],
   };
@@ -189,7 +190,10 @@ async function onInitiated(payload: Record<string, unknown>): Promise<void> {
           });
         }
       });
-      logger.info("inbound_dialed_browser", { callId: call.id, sipUsername: registration.sipUsername });
+      logger.info("inbound_dialed_browser", {
+        callId: call.id,
+        sipUsername: registration.sipUsername,
+      });
       void recordEvent({
         source: "command",
         type: "inbound_dialed_browser",
@@ -267,8 +271,8 @@ async function onOutboundInitiated(
  * call stops billing instead of leaving a leg (and its pair) connected.
  *
  * - Outbound: stale until the PSTN leg is answered.
- * - Inbound: the server answers the PSTN leg immediately, so stale until the
- *   agent's browser leg is bridged (active).
+ * - Inbound: the caller's leg rings until the agent answers, so stale until the
+ *   browser leg is active.
  */
 export async function enforceCallTimeouts(): Promise<number> {
   const client = getTelnyx();
@@ -317,7 +321,7 @@ async function onAnswered(payload: Record<string, unknown>): Promise<void> {
   if (!call) return;
 
   const leg = call.legs.find((l) => l.callControlId === callControlId);
-  const isWebrtc = leg?.role === "webrtc";
+  const role = leg?.role ?? "unknown";
   const now = new Date().toISOString();
 
   await mutate((data) => {
@@ -329,30 +333,38 @@ async function onAnswered(payload: Record<string, unknown>): Promise<void> {
     row.state = "active";
   });
 
-  if (isWebrtc) {
+  if (role === "webrtc") {
+    // The agent picked up. Stop the other ringing browser legs, then accept the
+    // caller's leg so it stops ringing. Bridging happens on the PSTN leg's own
+    // `call.answered` below, so we never bridge an unanswered leg.
+    for (const other of call.legs.filter(
+      (l) => l.role === "webrtc" && l.callControlId !== callControlId,
+    )) {
+      await safe(() => client.calls.actions.hangup(other.callControlId, {}), "cancel_extra_leg");
+    }
     const pstn = call.legs.find((l) => l.role === "pstn");
     if (pstn) {
+      await safe(() => client.calls.actions.answer(pstn.callControlId, {}), "answer_pstn");
+    }
+  } else if (role === "pstn") {
+    // The caller's leg is accepted now that a human answered; connect the two legs
+    // (same initiator/target as before, just no longer before the agent answers).
+    const webrtc = call.legs.find((l) => l.role === "webrtc" && l.state !== "ended");
+    if (webrtc) {
       await safe(
         () =>
-          client.calls.actions.bridge(callControlId, {
-            call_control_id_to_bridge_with: pstn.callControlId,
+          client.calls.actions.bridge(webrtc.callControlId, {
+            call_control_id_to_bridge_with: callControlId,
           }),
         "bridge_inbound",
       );
-      for (const other of call.legs.filter(
-        (l) => l.role === "webrtc" && l.callControlId !== callControlId,
-      )) {
-        await safe(
-          () => client.calls.actions.hangup(other.callControlId, {}),
-          "cancel_extra_leg",
-        );
-      }
     }
   }
+
   void recordEvent({
     source: "webhook",
     type: "call_answered",
-    message: `leg ${leg?.role ?? "unknown"} answered`,
+    message: `leg ${role} answered`,
     callId: call.id,
   });
 }
@@ -367,7 +379,12 @@ async function onBridged(payload: Record<string, unknown>): Promise<void> {
     const row = data.calls.find((c) => c.id === call.id);
     if (row) row.state = "active";
   });
-  void recordEvent({ source: "webhook", type: "call_bridged", message: "legs bridged", callId: call.id });
+  void recordEvent({
+    source: "webhook",
+    type: "call_bridged",
+    message: "legs bridged",
+    callId: call.id,
+  });
 }
 
 async function onHangup(payload: Record<string, unknown>): Promise<void> {
@@ -396,7 +413,9 @@ async function onHangup(payload: Record<string, unknown>): Promise<void> {
     if (hangupCause) row.hangupCause = hangupCause;
   });
 
-  for (const other of call.legs.filter((l) => l.callControlId !== callControlId && l.state !== "ended")) {
+  for (const other of call.legs.filter(
+    (l) => l.callControlId !== callControlId && l.state !== "ended",
+  )) {
     await hangupLeg(client, other.callControlId, "hangup_other_leg");
   }
 
@@ -442,7 +461,9 @@ async function onCost(payload: Record<string, unknown>): Promise<void> {
   const parts = Array.isArray(payload.cost_parts) ? payload.cost_parts : [];
   const currency =
     parts
-      .map((p) => (p && typeof p === "object" ? str((p as Record<string, unknown>).currency) : null))
+      .map((p) =>
+        p && typeof p === "object" ? str((p as Record<string, unknown>).currency) : null,
+      )
       .find((c) => c) ?? null;
 
   await mutate((data) => {
@@ -488,10 +509,7 @@ async function onCost(payload: Record<string, unknown>): Promise<void> {
   });
 }
 
-async function onMachineDetection(
-  type: string,
-  payload: Record<string, unknown>,
-): Promise<void> {
+async function onMachineDetection(type: string, payload: Record<string, unknown>): Promise<void> {
   const callControlId = str(payload.call_control_id);
   if (!callControlId) return;
   const db = await getDb();
